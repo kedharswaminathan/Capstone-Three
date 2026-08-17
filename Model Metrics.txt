@@ -1,0 +1,87 @@
+CUSTOMER CHURN PREDICTION
+CAPSTONE THREE - MODEL METRICS
+
+Dataset:
+Telco Customer Churn Dataset
+
+Target:
+Churn
+0 = No Churn
+1 = Churn
+
+Train/Test Split:
+80% Training
+20% Testing
+
+Models Evaluated:
+1. Logistic Regression
+2. Random Forest
+3. Gradient Boosting
+
+--------------------------------------------------
+MODEL PERFORMANCE
+--------------------------------------------------
+
+Logistic Regression
+Accuracy:  80.38%
+Precision: 64.94%
+Recall:    56.95%
+F1-Score:  60.68%
+ROC-AUC:   83.61%
+
+Random Forest
+Accuracy:  78.32%
+Precision: 61.31%
+Recall:    50.00%
+F1-Score:  55.08%
+ROC-AUC:   81.98%
+
+Gradient Boosting
+Accuracy:  79.18%
+Precision: 63.46%
+Recall:    51.07%
+F1-Score:  56.59%
+ROC-AUC:   82.00%
+
+--------------------------------------------------
+SELECTED FINAL MODEL
+--------------------------------------------------
+
+Model:
+Logistic Regression
+
+Reason for Selection:
+Logistic Regression produced the strongest overall
+performance among the three models in the reported
+test results. It achieved the highest accuracy,
+precision, recall, F1-score, and ROC-AUC.
+
+--------------------------------------------------
+KEY MODEL FEATURES
+--------------------------------------------------
+
+Important customer characteristics identified during
+the project include:
+
+- Customer tenure
+- Monthly charges
+- Total charges
+- Contract type
+- Internet service
+- Payment method
+- Online security
+- Technical support
+
+--------------------------------------------------
+BUSINESS OBJECTIVE
+--------------------------------------------------
+
+Use customer characteristics and historical behavior
+to identify customers who are at increased risk of
+churning.
+
+Potential business applications include:
+
+1. Targeted retention campaigns
+2. Early intervention for newer customers
+3. Customer-specific retention offers

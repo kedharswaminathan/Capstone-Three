@@ -1,379 +1,157 @@
-# Customer Churn Prediction Using Machine Learning
+# Customer Churn Prediction
 
-## Capstone Three Project
+**Author:** Kedhar Swaminathan
+**Program:** Springboard Data Analytics Career Track
 
-**Author:** Kedhar Swaminathan  
-**Program:** Springboard Data Science Career Track
-
----
-
-## Project Overview
-
-Customer churn is an important challenge for subscription-based businesses. Losing customers can reduce recurring revenue and increase the cost of acquiring new customers.
-
-This project uses machine learning to predict which customers are most likely to cancel their subscription.
-
-The analysis uses customer demographic information, account characteristics, service subscriptions, tenure, and billing information to identify patterns associated with customer churn.
-
-The ultimate goal is to provide businesses with information that can support targeted customer-retention strategies.
+Predicting which telecom subscribers are likely to cancel, and — more importantly — deciding which of them are worth contacting.
 
 ---
 
-## Business Problem
+## Business problem
 
-The primary business question for this project is:
+Retaining an existing customer is cheaper than acquiring a new one, so a subscription business wants to intervene *before* a customer leaves. That requires answering two separate questions:
 
-> **Can machine learning be used to identify customers who are at increased risk of churning?**
+1. **Can we rank customers by churn risk?** (a modelling question)
+2. **Where do we draw the line between "contact" and "don't contact"?** (a business question)
 
-If customers at risk of churn can be identified early, businesses can prioritize those customers for retention efforts before they cancel their subscriptions.
+Most churn analyses answer only the first. This project answers both, and finds that the second question cannot be settled without financial data the dataset does not contain.
 
 ---
 
 ## Dataset
 
-The project uses the Telco Customer Churn dataset.
+The IBM Telco Customer Churn dataset: **7,043 customer records, 21 variables** covering demographics, account details, subscribed services, tenure, and billing.
 
-The original dataset contains:
+The dataset is committed to `data/` so the notebooks run without modification.
 
-- **7,043 customer records**
-- **21 variables**
-- Demographic information
-- Account information
-- Service information
-- Billing information
-- Customer tenure
-- Churn status
-
-The target variable is:
-
-- `0` = Customer did not churn
-- `1` = Customer churned
-
-The original dataset contains variables including:
-
-- `gender`
-- `SeniorCitizen`
-- `Partner`
-- `Dependents`
-- `tenure`
-- `PhoneService`
-- `MultipleLines`
-- `InternetService`
-- `OnlineSecurity`
-- `OnlineBackup`
-- `DeviceProtection`
-- `TechSupport`
-- `StreamingTV`
-- `StreamingMovies`
-- `Contract`
-- `PaperlessBilling`
-- `PaymentMethod`
-- `MonthlyCharges`
-- `TotalCharges`
-- `Churn`
+**Class balance: 26.5% of customers churned.** This matters more than it first appears — see below.
 
 ---
 
-# Project Workflow
+## Why accuracy is the wrong metric here
 
-The project is divided into four Jupyter notebooks.
+Because only 26.5% of customers churn, a model that predicts "no churn" for everyone achieves **73.42% accuracy** while providing zero business value. Any accuracy figure in this project has to be read against that baseline, not against zero.
 
-### 01 - Data Understanding
-
-`01_data_understanding.ipynb`
-
-This notebook explores and understands the customer churn dataset.
-
-The analysis includes:
-
-- Dataset structure
-- Data types
-- Missing values
-- Numerical variables
-- Categorical variables
-- Target variable
-- Exploratory data analysis
-- Relationships between customer characteristics and churn
-
-The dataset contains 7,043 customers and 21 variables.
-
-One important data-cleaning issue identified during exploration was that `TotalCharges` was stored as a string rather than a numerical variable.
+ROC-AUC is the headline metric instead, because it measures how well the model *ranks* customers by risk — which is the capability a retention program actually uses.
 
 ---
 
-### 02 - Feature Engineering
+## Model performance
 
-`02_feature_engineering.ipynb`
+All models evaluated on a held-out 20% test set (stratified split, `random_state=42`).
 
-This notebook prepares the dataset for machine learning.
+| Model | Accuracy | Precision | Recall | F1 | ROC-AUC |
+|---|---|---|---|---|---|
+| Baseline (predict "no churn") | 73.42% | — | 0.00% | — | 0.500 |
+| **Logistic Regression** (`class_weight='balanced'`) | 72.64% | 49.09% | **79.41%** | 60.67% | 0.8353 |
+| Random Forest | 78.68% | 62.25% | 50.27% | 55.62% | 0.8172 |
+| Gradient Boosting | [FILL] | [FILL] | [FILL] | [FILL] | 0.841 |
 
-The preprocessing steps include:
+**Logistic Regression is the selected model**, despite Gradient Boosting's marginally higher ROC-AUC (0.841 vs 0.835). The gap is small enough to be within noise on a test set this size, and logistic regression's coefficients show both the direction and relative magnitude of each predictor's effect — which matters when the output has to justify spending money on specific customers.
 
-- Converting `TotalCharges` to numeric
-- Handling missing values
-- Removing `customerID`
-- Separating features and target
-- Converting `Churn` into a binary variable
-- One-hot encoding categorical variables
-- Splitting the data into training and testing datasets
-- Standardizing numerical features
-- Checking the final dataset for missing and infinite values
+### What class weighting did, and didn't do
 
-An 80/20 train-test split was used.
+Applying `class_weight='balanced'` to the logistic regression:
 
----
+| | Default | Balanced |
+|---|---|---|
+| Recall | 56.95% | **79.41%** |
+| Precision | 64.94% | 49.09% |
+| Accuracy | 80.38% | 72.64% |
+| ROC-AUC | 0.8361 | 0.8353 |
 
-### 03 - Modeling
+**ROC-AUC did not move.** The model's ability to rank customers by risk was identical before and after. What changed was the operating point — where the cut between "flag" and "don't flag" falls. Class weighting is a threshold adjustment in disguise, not a modelling improvement.
 
-`03_modeling.ipynb`
-
-Three classification models were developed and compared:
-
-1. Logistic Regression
-2. Random Forest
-3. Gradient Boosting
-
-The models were evaluated using:
-
-- Accuracy
-- Precision
-- Recall
-- F1-Score
-- ROC-AUC
-
-The modeling stage also includes visual comparisons of model performance, ROC curves, confusion matrices, and feature importance.
+Accuracy now sits slightly below the naive baseline. On this problem that is acceptable: the errors have very different costs, and accuracy weights them equally.
 
 ---
 
-### 04 - Evaluation
+## The retention decision: choosing a threshold deliberately
 
-`04_evaluation.ipynb`
+`predict()` uses a 0.5 cutoff because that is scikit-learn's default, not because anyone chose it. Replacing it with an explicit cost model:
 
-The final evaluation examines the performance of the selected model in greater detail.
+- Each retention offer costs **$50**, paid on every customer contacted
+- A lost customer costs **$500** in foregone lifetime value
+- The offer retains **30%** of the churning customers who receive it
 
-The evaluation includes:
+Under these assumptions the cost-minimizing threshold is **0.40**, contacting 440 customers (255 genuine churners, 185 false alarms) at a total cost of $170,750 — against $171,450 at the default cutoff.
 
-- Final model performance
-- Confusion matrix
-- Classification report
-- Actual vs. predicted churn
-- ROC curve
-- Churn probability
-- Feature analysis
-- Business interpretation
-- Recommendations
-- Limitations
-- Future research
+**The saving is roughly $700, under 1% of total cost.** Threshold tuning is close to irrelevant here.
 
----
+### Sensitivity to the cost assumption
 
-# Model Performance
+The $500 figure is an assumption; the dataset contains no margin or acquisition-cost data. Varying it:
 
-The final reported test-set results are:
+| Lost-customer value | Ratio | Optimal threshold | Customers contacted |
+|---|---|---|---|
+| $250 | 5:1 | 0.69 | 103 |
+| $500 | 10:1 | 0.40 | 440 |
+| $1,000 | 20:1 | 0.14 | 817 |
 
-| Model | Accuracy | Precision | Recall | F1-Score | ROC-AUC |
-|---|---:|---:|---:|---:|---:|
-| **Logistic Regression** | **80.38%** | **64.94%** | **56.95%** | **60.68%** | **83.61%** |
-| Random Forest | 78.32% | 61.31% | 50.00% | 55.08% | 81.98% |
-| Gradient Boosting | 79.18% | 63.46% | 51.07% | 56.59% | 82.00% |
+**An eightfold swing in campaign size**, driven entirely by an assumed number. This matches the analytical break-even, `OFFER_COST / (CHURN_LOSS × SAVE_RATE)`, which gives 0.67, 0.33, and 0.17 respectively.
 
-## Final Model
+### What this means
 
-### Logistic Regression
-
-Logistic Regression was selected as the final model based on the reported test-set results.
-
-It achieved:
-
-- **80.38% Accuracy**
-- **64.94% Precision**
-- **56.95% Recall**
-- **60.68% F1-Score**
-- **83.61% ROC-AUC**
-
-The model provides a useful balance between predictive performance and interpretability.
+1. **No single threshold can be recommended** without real customer-lifetime-value figures from finance. Any project that reports one without stating its cost assumptions is reporting an arbitrary number.
+2. **Offer effectiveness dominates threshold choice.** Raising the 30% save rate would change total cost far more than any adjustment to the model or its cutoff. That is where the business should focus.
 
 ---
 
-# Key Findings
+## Key predictors
 
-The exploratory analysis identified several differences between customers who churned and customers who remained.
+Contract type, tenure, fiber-optic internet service, payment method, and monthly charges carry the strongest signal. Directionally: shorter-tenure, month-to-month customers on higher monthly charges churn more.
 
-### Customer Tenure
-
-Customers who churned generally had shorter tenures than customers who remained with the company.
-
-This suggests that newer customers may represent an important group for retention efforts.
-
-### Monthly Charges
-
-Customers who churned generally had higher monthly charges than customers who remained.
-
-This suggests that monthly pricing and perceived value may be important areas for further investigation.
-
-### Total Charges
-
-Customers who churned generally had lower total charges.
-
-This is consistent with their shorter tenure because customers who leave earlier have less time to accumulate total charges.
-
-### Customer Contracts
-
-Contract type appears to have an important relationship with churn.
-
-Month-to-month customers represent an important segment for further retention analysis.
-
-### Service and Billing Characteristics
-
-The modeling analysis identified customer billing and service characteristics as important predictors of churn.
-
-Important variables include:
-
-- Tenure
-- Total charges
-- Monthly charges
-- Contract type
-- Internet service
-- Payment method
-- Online security
-- Technical support
+Note that these are associations, not causes. Higher monthly charges correlating with churn does not establish that lowering prices would retain anyone.
 
 ---
 
-# Business Recommendations
+## Project structure
 
-## 1. Create a High-Risk Customer Retention Program
-
-Use the churn prediction model to identify customers with a higher probability of leaving.
-
-These customers can be prioritized for proactive retention campaigns.
-
-Possible interventions could include:
-
-- Personalized offers
-- Customer-service outreach
-- Contract incentives
-- Service upgrades
-- Loyalty programs
-
----
-
-## 2. Focus on Early-Customer Retention
-
-The analysis indicates that customer tenure is an important factor associated with churn.
-
-Businesses should consider additional onboarding and engagement strategies during the early stages of the customer relationship.
-
-The objective would be to establish customer value before the customer reaches the point of cancellation.
-
----
-
-## 3. Investigate Pricing and Service Value
-
-Customers with higher monthly charges showed differences in churn behavior.
-
-The business should investigate whether customers perceive their monthly costs as providing sufficient value.
-
-Possible strategies include:
-
-- Reviewing pricing structures
-- Creating personalized service bundles
-- Offering targeted upgrades
-- Improving communication about service benefits
-
----
-
-# Important Business Metrics
-
-The machine-learning model provides predictive metrics, but the ultimate business goal is to reduce customer churn.
-
-Future implementation should measure:
-
-- Reduction in churn rate
-- Customer retention rate
-- Revenue retained
-- Customer Lifetime Value (CLV)
-- Retention campaign effectiveness
-
----
-
-# Limitations
-
-This project has several limitations.
-
-### Historical Data
-
-The model is trained on historical customer data and may not perfectly predict future customer behavior.
-
-### Correlation Does Not Equal Causation
-
-The model identifies relationships between customer characteristics and churn.
-
-These relationships should not automatically be interpreted as causal relationships.
-
-### False Positives and False Negatives
-
-The model will not correctly classify every customer.
-
-Some customers who churn will be missed, while some customers who remain may be incorrectly identified as likely to churn.
-
-### Dataset Limitations
-
-The dataset contains customer demographic, account, service, and billing information but does not include every possible factor that may influence churn.
-
-Additional information such as customer satisfaction, support interactions, complaints, and engagement could potentially improve future models.
-
----
-
-# Future Research
-
-Future work could improve the project in several areas.
-
-## Model Optimization
-
-Future versions could use:
-
-- Hyperparameter tuning
-- Cross-validation
-- Additional classification algorithms
-- Ensemble methods
-
-## Additional Customer Data
-
-Additional variables could include:
-
-- Customer satisfaction scores
-- Customer service interactions
-- Complaint history
-- Usage behavior
-- Promotional offers
-- Customer engagement
-
-## Customer Segmentation
-
-Customers could be divided into different risk groups to develop more targeted retention strategies.
-
-## Retention Campaign Testing
-
-The model could be incorporated into a customer-retention campaign and evaluated using A/B testing.
-
-This would allow the business to determine whether model-driven interventions actually reduce churn.
-
----
-
-# Project Structure
-
-```text
+```
 Capstone-Three/
-│
-├── 01_data_understanding.ipynb (Capstone Three).ipynb
-├── 02_feature_engineering.ipynb (Capstone Three).ipynb
-├── 03_modeling.ipynb (Capstone Three).ipynb
-├── 04_evaluation.ipynb (Capstone Three).ipynb
-│
-├── model_metrics.csv
-├── model_metrics.txt
-├── README.md
-│
-└── data/
-    └── WA_Fn-UseC_-Telco-Customer-Churn.csv
+├── data/
+│   └── WA_Fn-UseC_-Telco-Customer-Churn.csv
+├── 01_data_understanding.ipynb    — EDA, class balance, baseline
+├── 02_feature_engineering.ipynb   — cleaning, encoding, train/test split
+├── 03_modeling.ipynb              — three classifiers, comparison
+├── 04_evaluation.ipynb            — final model, cost analysis, sensitivity
+├── final_model_comparison.csv
+├── final_model_predictions.csv
+├── logistic_regression_coefficients.csv
+└── README.md
+```
+
+Run the notebooks in order. All paths are relative to the repository root.
+
+---
+
+## Preprocessing notes
+
+- `TotalCharges` arrives as text and contains blanks for customers with zero tenure; converted with `pd.to_numeric(errors='coerce')` and the resulting nulls handled explicitly
+- `customerID` dropped (unique identifier, no predictive content)
+- Categorical variables one-hot encoded
+- Numeric features standardized, fit on the training split only
+- 80/20 stratified split, `random_state=42`
+
+---
+
+## Limitations
+
+**No cost data.** The single largest limitation. Without customer lifetime value, the retention threshold cannot be specified — only bounded.
+
+**No hyperparameter tuning or cross-validation.** Results come from a single train/test split with default parameters. Cross-validated performance would be a more reliable estimate.
+
+**Associations, not causes.** The model identifies patterns in historical data. It does not establish that changing any of these variables would change churn behaviour.
+
+**Static snapshot.** The dataset captures one point in time and cannot reflect changes in customer behaviour, competitive pressure, or pricing.
+
+**Missing behavioural signals.** Support interactions, complaints, outages, and satisfaction scores are absent and would likely improve prediction.
+
+---
+
+## Next steps
+
+- Obtain real CLV figures to fix the threshold
+- Cross-validate and tune hyperparameters
+- Test whether model-driven retention offers actually reduce churn, via a holdout control group
+- Measure retained revenue rather than classification metrics
